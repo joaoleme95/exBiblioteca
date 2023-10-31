@@ -1,0 +1,83 @@
+--SISTEMA COMERCIO
+
+-- Criar tabela Produtos
+CREATE TABLE Produtos (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    nome VARCHAR(255) NOT NULL,
+    descricao TEXT,
+    preco DECIMAL(10, 2) NOT NULL,
+    estoque INT NOT NULL
+);
+
+-- Criar tabela Clientes
+CREATE TABLE Clientes (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    nome VARCHAR(255) NOT NULL,
+    endereco_entrega VARCHAR(255),
+    informacoes_contato VARCHAR(255)
+);
+
+-- Criar tabela Pedidos
+CREATE TABLE Pedidos (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    data DATE NOT NULL,
+    cliente_id INT,
+    status VARCHAR(50) NOT NULL,
+    FOREIGN KEY (cliente_id) REFERENCES Clientes(id)
+);
+
+-- Criar tabela Itens de Pedido
+CREATE TABLE ItensPedido (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    pedido_id INT,
+    produto_id INT,
+    quantidade INT NOT NULL,
+    FOREIGN KEY (pedido_id) REFERENCES Pedidos(id),
+    FOREIGN KEY (produto_id) REFERENCES Produtos(id)
+);
+
+-- Criar stored procedure para permitir que os clientes adicionem produtos ao carrinho
+DELIMITER //
+CREATE PROCEDURE adicionar_produto_ao_carrinho(
+    IN cliente_id INT,
+    IN produto_id INT,
+    IN quantidade INT
+)
+BEGIN
+    -- Inserir um novo item de pedido no carrinho
+    INSERT INTO ItensPedido (pedido_id, produto_id, quantidade)
+    VALUES ((SELECT id FROM Pedidos WHERE cliente_id = cliente_id AND status = 'carrinho'), produto_id, quantidade);
+END //
+DELIMITER ;
+
+-- Criar stored procedure para processar pedidos
+DELIMITER //
+CREATE PROCEDURE processar_pedido(
+    IN pedido_id INT
+)
+BEGIN
+    -- Atualizar o estoque dos produtos com base nos itens do pedido
+    UPDATE Produtos P
+    INNER JOIN ItensPedido IP ON P.id = IP.produto_id
+    SET P.estoque = P.estoque - IP.quantidade;
+
+    -- Atualizar o status do pedido para 'processado'
+    UPDATE Pedidos
+    SET status = 'processado'
+    WHERE id = pedido_id;
+END //
+DELIMITER ;
+
+-- Criar view para mostrar o histórico de pedidos de um cliente
+CREATE VIEW historico_pedidos_cliente AS
+SELECT P.id AS pedido_id, P.data, PR.nome AS produto, IP.quantidade
+FROM Pedidos P
+INNER JOIN ItensPedido IP ON P.id = IP.pedido_id
+INNER JOIN Produtos PR ON IP.produto_id = PR.id
+WHERE P.status = 'processado';
+
+-- Criar view para fornecer uma lista de todos os produtos disponíveis
+CREATE VIEW produtos_disponiveis AS
+SELECT nome, descricao, preco, estoque
+FROM Produtos
+WHERE estoque > 0;
